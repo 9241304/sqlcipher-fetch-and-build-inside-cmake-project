@@ -5,3 +5,7 @@ Sample uses vcpkg to get and build sqlcipher dependencies. Why can't you use sql
 In the sample I'm using x64-windows-static-md triplet
 
 Note. If you need dynamic version of sqlcipher, just use vcpkg
+
+Prerequisites
+Download and install Tcl (recommended link)
+Add tcl tools to PATH. You can skip this step, but make sure you made SET "PATH=%PATH%;c:\path\to\tcl\tools" in Visual Studio Command Prompt
