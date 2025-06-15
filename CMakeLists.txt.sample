@@ -1,0 +1,60 @@
+#vcpkg and project definitions
+
+...
+
+#fetch and build sqlcipher, works in multiconfig
+
+include(FetchContent)
+include(ExternalProject)
+
+FetchContent_Declare(
+  sqlcipher
+  GIT_REPOSITORY https://github.com/sqlcipher/sqlcipher.git
+  GIT_TAG        v4.8.0
+)
+FetchContent_MakeAvailable(sqlcipher)
+
+file(TO_NATIVE_PATH ${sqlcipher_SOURCE_DIR} sqlcipher_SOURCE_DIR)
+
+set(SQLCIPHER_BASE_BUILD_DIR "${CMAKE_BINARY_DIR}/sqlcipher")
+set(SQLCIPHER_BUILD_DIR "${SQLCIPHER_BASE_BUILD_DIR}/$<CONFIG>")
+
+set(LIBDIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/$<IF:$<CONFIG:Debug>,debug,>/lib")
+
+ExternalProject_Add(sqlcipher_build
+  BUILD_DIR         ${SQLCIPHER_BUILD_DIR}
+  SOURCE_DIR        ${sqlcipher_SOURCE_DIR}
+  CONFIGURE_COMMAND ""
+  BUILD_IN_SOURCE   FALSE
+  BUILD_ALWAYS      FALSE
+  BUILD_COMMAND
+	${CMAKE_COMMAND} -E make_directory ${SQLCIPHER_BUILD_DIR} && cd ${SQLCIPHER_BUILD_DIR} && nmake /f ${sqlcipher_SOURCE_DIR}/Makefile.msc
+      TOP=${sqlcipher_SOURCE_DIR}
+      #don`t use this for static build, only for static-md
+      USE_CRT_DLL=1 
+      DEBUG=$<IF:$<CONFIG:Debug>,2,0>
+      "OPTS=-I${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include -DSQLITE_HAS_CODEC=1 -DSQLCIPHER_CRYPTO_OPENSSL=1 -DSQLITE_TEMP_STORE=2 -DSQLITE_EXTRA_INIT=sqlcipher_extra_init -DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown -DHAVE_STDINT_H -DSQLITE_OMIT_JSON=1"
+      "TLIBS=${LIBDIR}/libcrypto.lib Advapi32.lib User32.lib Ws2_32.lib Crypt32.lib" 
+  INSTALL_COMMAND ""
+)
+
+set(SQLCIPHER_LIB ${SQLCIPHER_BUILD_DIR}/libsqlite3.lib)
+
+add_library(sqlcipher_static STATIC IMPORTED)
+add_dependencies(sqlcipher_static sqlcipher_build)
+
+#we can`t use INTERFACE_INCLUDE_DIRECTORY here, it will cause error on build
+#we also can`t use $<CONFIG> here, so we should describe all targets explicitly
+set_target_properties(sqlcipher_static PROPERTIES
+  IMPORTED_LOCATION_DEBUG "${SQLCIPHER_BASE_BUILD_DIR}/Debug/libsqlite3.lib"
+  IMPORTED_LOCATION_RELEASE "${SQLCIPHER_BASE_BUILD_DIR}/Release/libsqlite3.lib"
+  IMPORTED_LOCATION_RELWITHDEBINFO "${SQLCIPHER_BASE_BUILD_DIR}/RelWithDebInfo/libsqlite3.lib"
+  IMPORTED_LOCATION_MINSIZEREL "${SQLCIPHER_BASE_BUILD_DIR}/MinSizeRel/libsqlite3.lib"
+  INTERFACE_COMPILE_DEFINITIONS SQLITE_HAS_CODEC=1 
+)
+
+...
+
+#using in target
+target_link_libraries(exe_target PRIVATE sqlcipher_static)
+target_include_directories(blindspotagent_lib PRIVATE ${SQLCIPHER_BUILD_DIR})
